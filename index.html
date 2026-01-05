@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Ferrari Racing Challenge</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
+        canvas { display: block; background: #2ecc71; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 2px 2px black; font-size: 20px; }
+        #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: gold; font-size: 50px; text-align: center; display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        Velocidade: <span id="speed">0</span> km/h<br>
+        Carros Restantes: <span id="opponents">15</span><br>
+        Progresso: <span id="progress">0</span>%
+    </div>
+
+    <div id="msg">🏆 VOCÊ GANHOU O TROFÉU! 🏆</div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const speedEl = document.getElementById('speed');
+const oppEl = document.getElementById('opponents');
+const progEl = document.getElementById('progress');
+const msg = document.getElementById('msg');
+
+canvas.width = 500;
+canvas.height = window.innerHeight;
+
+// Configurações do Jogo
+let speed = 0;
+let maxSpeed = 15;
+let acceleration = 0.2;
+let friction = 0.05;
+let roadOffset = 0;
+let distanceTraveled = 0;
+const finishLine = 10000; // Distância para vencer
+let gameOver = false;
+
+// Jogador (Ferrari)
+const player = {
+    x: canvas.width / 2 - 20,
+    y: canvas.height - 150,
+    w: 40,
+    h: 70,
+    color: '#FF0000' // Vermelho Ferrari
+};
+
+// Teclas
+const keys = {};
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// Inimigos
+const enemies = [];
+for(let i=0; i<15; i++) {
+    enemies.push({
+        x: Math.random() * (canvas.width - 150) + 75,
+        y: -i * 600 - 500, // Espaçados para o jogador ultrapassar
+        w: 40,
+        h: 70,
+        speed: Math.random() * 2 + 3,
+        color: `hsl(${Math.random() * 360}, 70%, 50%)`,
+        passed: false
+    });
+}
+
+function drawCar(x, y, color, isPlayer = false) {
+    // Corpo
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, 40, 70);
+    // Vidro
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x + 5, y + 15, 30, 20);
+    // Spoiler (se for Ferrari)
+    if(isPlayer) {
+        ctx.fillStyle = '#800000';
+        ctx.fillRect(x - 5, y + 60, 50, 5);
+    }
+    // Rodas
+    ctx.fillStyle = 'black';
+    ctx.fillRect(x-2, y+10, 5, 15);
+    ctx.fillRect(x+37, y+10, 5, 15);
+    ctx.fillRect(x-2, y+45, 5, 15);
+    ctx.fillRect(x+37, y+45, 5, 15);
+}
+
+function update() {
+    if(gameOver) return;
+
+    // Movimentação lateral
+    if (keys['ArrowLeft'] && player.x > 70) player.x -= 5;
+    if (keys['ArrowRight'] && player.x < canvas.width - 110) player.x += 5;
+
+    // Aceleração e Freio
+    if (keys['ArrowUp']) speed += acceleration;
+    else if (keys['ArrowDown']) speed -= acceleration;
+    else speed -= friction;
+
+    // Limites de velocidade
+    if (speed < 0) speed = 0;
+    if (speed > maxSpeed) speed = maxSpeed;
+
+    distanceTraveled += speed;
+    roadOffset += speed;
+
+    // Atualizar UI
+    speedEl.innerText = Math.floor(speed * 20);
+    progEl.innerText = Math.min(100, Math.floor((distanceTraveled / finishLine) * 100));
+
+    // Lógica dos inimigos e colisão
+    let activeOpponents = 0;
+    enemies.forEach(en => {
+        en.y += speed - en.speed;
+        
+        if(!en.passed) activeOpponents++;
+        if(en.y > canvas.height) en.passed = true;
+
+        // Colisão simples
+        if (player.x < en.x + en.w && player.x + player.w > en.x &&
+            player.y < en.y + en.h && player.y + player.h > en.y) {
+            speed = 0; // Bateu, para o carro
+        }
+    });
+    oppEl.innerText = activeOpponents;
+
+    // Condição de Vitória
+    if(distanceTraveled >= finishLine) {
+        gameOver = true;
+        msg.style.display = 'block';
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Céu (topo da tela simulado)
+    ctx.fillStyle = "#87CEEB";
+    ctx.fillRect(0,0, canvas.width, 100);
+
+    // Grama lateral ja está no fundo do body, aqui desenhamos a estrada
+    ctx.fillStyle = "#555";
+    ctx.fillRect(50, 0, canvas.width - 100, canvas.height);
+
+    // Linhas da estrada
+    ctx.strokeStyle = "white";
+    ctx.setLineDash([20, 20]);
+    ctx.lineDashOffset = -roadOffset;
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, 0);
+    ctx.lineTo(canvas.width / 2, canvas.height);
+    ctx.stroke();
+
+    // Bordas da estrada
+    ctx.setLineDash([]);
+    ctx.fillStyle = "white";
+    ctx.fillRect(60, 0, 5, canvas.height);
+    ctx.fillRect(canvas.width - 65, 0, 5, canvas.height);
+
+    // Desenhar Inimigos
+    enemies.forEach(en => {
+        drawCar(en.x, en.y, en.color);
+    });
+
+    // Desenhar Player
+    drawCar(player.x, player.y, player.color, true);
+
+    requestAnimationFrame(() => {
+        update();
+        draw();
+    });
+}
+
+draw();
+</script>
+</body>
+</html>
